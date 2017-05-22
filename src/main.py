@@ -2,7 +2,7 @@ import shutil
 import itertools
 import tensorflow as tf
 
-import io
+import inout
 
 def weightVar(shape):
     ''' Generate variables as weight '''
@@ -56,8 +56,8 @@ def outLayer(x, inChannels, outChannels):
         return tf.matmul(x, weight) + bias
 
 def run():
-    x = tf.placeholder(tf.float32, shape=[None, 784])
-    _y = tf.placeholder(tf.float32, shape=[None, 10])
+    x = tf.placeholder(tf.float32, shape=[None, 784], name = 'x')
+    _y = tf.placeholder(tf.float32, shape=[None, 10], name = 'y_true')
     xImage = tf.reshape(x, [-1,28,28,1])
 
     conv1 = convLayer(xImage, 5, 5, 1, 32, 'conv1')
@@ -65,7 +65,7 @@ def run():
     conv2Flat = tf.reshape(conv2, [-1, 7 * 7 * 64])
     dense1 = denseLayer(conv2Flat, 7 * 7 * 64, 1024, 'dense1')
 
-    keepProb = tf.placeholder(tf.float32)
+    keepProb = tf.placeholder(tf.float32, name = 'keepProb')
     drop = tf.nn.dropout(dense1, keepProb)
 
     y = outLayer(drop, 1024, 10)
@@ -85,7 +85,7 @@ def run():
     summaryWriter = tf.summary.FileWriter('logs', sess.graph)
     summaries = tf.summary.merge_all()
 
-    mnist = io.TrainDataGetter(50)
+    mnist = inout.TensorflowTrainDataGetter(50)
     for i, batch in zip(itertools.count(), mnist):
         if i % 100 == 0:
             trainAccuracy, trainSummaries = sess.run((accuracy, summaries), feed_dict = {
@@ -96,7 +96,7 @@ def run():
             print("Step %d, training accuracy %g"%(i, trainAccuracy))
             summaryWriter.add_summary(trainSummaries, i)
 
-        optimizer.run(feed_dict = {
+        sess.run(optimizer, feed_dict = {
             x: batch[0],
             _y: batch[1],
             keepProb: 0.5

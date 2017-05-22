@@ -3,4 +3,5 @@
 *.pyc
 logs
 data
+MNIST_data
 
