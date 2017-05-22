@@ -1,5 +1,4 @@
 import shutil
-import itertools
 import tensorflow as tf
 
 import inout
@@ -85,8 +84,8 @@ def run():
     summaryWriter = tf.summary.FileWriter('logs', sess.graph)
     summaries = tf.summary.merge_all()
 
-    mnist = inout.TensorflowTrainDataGetter(50)
-    for i, batch in zip(itertools.count(), mnist):
+    mnist = inout.TrainDataGetter(50)
+    for i, batch in zip(range(20000), mnist):
         if i % 100 == 0:
             trainAccuracy, trainSummaries = sess.run((accuracy, summaries), feed_dict = {
                 x: batch[0],
