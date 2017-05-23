@@ -8,7 +8,7 @@ def weightVar(shape):
 
     with tf.name_scope('weight'):
         ret = tf.Variable(tf.truncated_normal(shape, stddev = 0.1))
-        tf.summary.histogram('histogram', ret)
+        # tf.summary.histogram('histogram', ret)
         return ret
 
 def biasVar(shape):
@@ -16,7 +16,7 @@ def biasVar(shape):
 
     with tf.name_scope('bias'):
         ret = tf.Variable(tf.constant(0.1, shape = shape))
-        tf.summary.histogram('histogram', ret)
+        # tf.summary.histogram('histogram', ret)
         return ret
 
 def conv2d(x, W):
@@ -71,8 +71,10 @@ def run():
     entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=y))
     optimizer = tf.train.AdamOptimizer(1e-4).minimize(entropy)
     correct = tf.equal(tf.argmax(y, 1), tf.argmax(_y, 1))
-    accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-    tf.summary.scalar('accuracy', accuracy)
+    trainAccuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+    validateAccuracy = tf.reduce_mean(tf.cast(correct, tf.float32)) # Call either this two
+    trainSummary = tf.summary.scalar('trainAccuracy', trainAccuracy)
+    validateSummary = tf.summary.scalar('validateAccuracy', validateAccuracy)
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -82,24 +84,19 @@ def run():
     except FileNotFoundError:
         pass
     summaryWriter = tf.summary.FileWriter('logs', sess.graph)
-    summaries = tf.summary.merge_all()
+    # summaries = tf.summary.merge_all()
 
-    mnist = inout.TrainDataGetter(50)
-    for i, batch in zip(range(20000), mnist):
+    trainData, validateData = inout.DataGetter(50, 500)
+    for i, trainBatch in zip(range(200000), trainData):
         if i % 100 == 0:
-            trainAccuracy, trainSummaries = sess.run((accuracy, summaries), feed_dict = {
-                x: batch[0],
-                _y: batch[1],
-                keepProb: 1.0}
-            )
-            print("Step %d, training accuracy %g"%(i, trainAccuracy))
-            summaryWriter.add_summary(trainSummaries, i)
+            validateBatch = next(validateData)
+            accuT, summT = sess.run((trainAccuracy, trainSummary), feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 1.0})
+            accuV, summV = sess.run((validateAccuracy, validateSummary), feed_dict = {x: validateBatch[0], _y: validateBatch[1], keepProb: 1.0})
+            print("Step %d, training accuracy %g, validating accuracy %g"%(i, accuT, accuV))
+            summaryWriter.add_summary(summT, i)
+            summaryWriter.add_summary(summV, i)
 
-        sess.run(optimizer, feed_dict = {
-            x: batch[0],
-            _y: batch[1],
-            keepProb: 0.5
-        })
+        sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.5})
 
 if __name__ == '__main__':
     run()
