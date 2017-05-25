@@ -71,10 +71,10 @@ def run():
     entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=y))
     optimizer = tf.train.AdamOptimizer(1e-4).minimize(entropy)
     correct = tf.equal(tf.argmax(y, 1), tf.argmax(_y, 1))
-    trainAccuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-    validateAccuracy = tf.reduce_mean(tf.cast(correct, tf.float32)) # Call either this two
-    trainSummary = tf.summary.scalar('trainAccuracy', trainAccuracy)
-    validateSummary = tf.summary.scalar('validateAccuracy', validateAccuracy)
+    trainError = 1 - tf.reduce_mean(tf.cast(correct, tf.float32))
+    validateError = 1 - tf.reduce_mean(tf.cast(correct, tf.float32)) # Call either this two
+    trainSummary = tf.summary.scalar('trainError', trainError)
+    validateSummary = tf.summary.scalar('validateError', validateError)
 
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
@@ -86,13 +86,13 @@ def run():
     summaryWriter = tf.summary.FileWriter('logs', sess.graph)
     # summaries = tf.summary.merge_all()
 
-    trainData, validateData = inout.DataGetter(50, 500)
-    for i, trainBatch in zip(range(200000), trainData):
+    trainData, validateData = inout.DataGetter(50, 5000)
+    for i, trainBatch in zip(range(1000000), trainData):
         if i % 100 == 0:
             validateBatch = next(validateData)
-            accuT, summT = sess.run((trainAccuracy, trainSummary), feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 1.0})
-            accuV, summV = sess.run((validateAccuracy, validateSummary), feed_dict = {x: validateBatch[0], _y: validateBatch[1], keepProb: 1.0})
-            print("Step %d, training accuracy %g, validating accuracy %g"%(i, accuT, accuV))
+            errT, summT = sess.run((trainError, trainSummary), feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 1.0})
+            errV, summV = sess.run((validateError, validateSummary), feed_dict = {x: validateBatch[0], _y: validateBatch[1], keepProb: 1.0})
+            print("Step %d, training error %g, validating error %g"%(i, errT, errV))
             summaryWriter.add_summary(summT, i)
             summaryWriter.add_summary(summV, i)
 
