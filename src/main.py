@@ -1,4 +1,6 @@
-import shutil
+import os
+import sys
+import json
 import tensorflow as tf
 
 import inout
@@ -35,7 +37,7 @@ def convLayer(x, height, width, inChannels, outChannels, name):
     with tf.name_scope(name):
         weight = weightVar([height, width, inChannels, outChannels])
         bias = biasVar([outChannels])
-        conv = tf.nn.relu(conv2d(x, weight) + bias)
+        conv = tf.nn.elu(conv2d(x, weight) + bias)
         return maxPool2x2(conv)
 
 def denseLayer(x, inChannels, outChannels, name):
@@ -44,7 +46,7 @@ def denseLayer(x, inChannels, outChannels, name):
     with tf.name_scope(name):
         weight = weightVar([inChannels, outChannels])
         bias = biasVar([outChannels])
-        return tf.nn.relu(tf.matmul(x, weight) + bias)
+        return tf.nn.elu(tf.matmul(x, weight) + bias)
 
 def outLayer(x, inChannels, outChannels):
     ''' Output layer '''
@@ -54,7 +56,15 @@ def outLayer(x, inChannels, outChannels):
         bias = biasVar([outChannels])
         return tf.matmul(x, weight) + bias
 
-def run():
+def run(action, expId, runId, stepId = None):
+    assert action == 'test' or not os.path.isfile("experiments/%s/%s/checkpoint0")
+    with open("experiments/%s/%s/conf.json"%(expId, runId)) as f:
+        conf = json.load(f)
+    assert "startEpisode" in conf
+    assert "endEpisode" in conf
+    assert "learningRate" in conf
+    assert "fromCheckpoint" in conf
+
     x = tf.placeholder(tf.float32, shape=[None, 784], name = 'x')
     _y = tf.placeholder(tf.float32, shape=[None, 10], name = 'y_true')
     xImage = tf.reshape(x, [-1,28,28,1])
@@ -69,8 +79,10 @@ def run():
 
     y = outLayer(drop, 1024, 10)
     entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=y))
-    optimizer = tf.train.AdamOptimizer(1e-4).minimize(entropy)
-    correct = tf.equal(tf.argmax(y, 1), tf.argmax(_y, 1))
+    optimizer = tf.train.AdamOptimizer(conf["learningRate"]).minimize(entropy)
+    output = tf.argmax(y, 1)
+    _output = tf.argmax(_y, 1)
+    correct = tf.equal(output, _output)
     trainError = 1 - tf.reduce_mean(tf.cast(correct, tf.float32))
     validateError = 1 - tf.reduce_mean(tf.cast(correct, tf.float32)) # Call either this two
     trainSummary = tf.summary.scalar('trainError', trainError)
@@ -79,25 +91,47 @@ def run():
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
 
-    try:
-        shutil.rmtree('logs')
-    except FileNotFoundError:
-        pass
-    summaryWriter = tf.summary.FileWriter('logs', sess.graph)
+    summaryWriter = tf.summary.FileWriter('experiments/%s/logs'%(expId), sess.graph)
     # summaries = tf.summary.merge_all()
 
-    trainData, validateData = inout.DataGetter(50, 5000)
-    for i, trainBatch in zip(range(1000000), trainData):
-        if i % 100 == 0:
-            validateBatch = next(validateData)
-            errT, summT = sess.run((trainError, trainSummary), feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 1.0})
-            errV, summV = sess.run((validateError, validateSummary), feed_dict = {x: validateBatch[0], _y: validateBatch[1], keepProb: 1.0})
-            print("Step %d, training error %g, validating error %g"%(i, errT, errV))
-            summaryWriter.add_summary(summT, i)
-            summaryWriter.add_summary(summV, i)
+    saver = tf.train.Saver(tf.global_variables(), max_to_keep = None)
 
-        sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.5})
+    if action == 'train':
+        if conf["fromCheckpoint"] is not None:
+            saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId - 1, conf["fromCheckpoint"]))
+
+        trainData, validateData = inout.DataGetter(50, 5000)
+        for i, trainBatch in zip(range(conf["startEpisode"], conf["endEpisode"]), trainData):
+            if (i + 1) % 100 == 0:
+                validateBatch = next(validateData)
+                errT, summT = sess.run((trainError, trainSummary), feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 1.0})
+                errV, summV = sess.run((validateError, validateSummary), feed_dict = {x: validateBatch[0], _y: validateBatch[1], keepProb: 1.0})
+                print("Step %d, training error %g, validating error %g"%(i, errT, errV))
+                summaryWriter.add_summary(summT, i)
+                summaryWriter.add_summary(summV, i)
+            if (i + 1) % 1000 == 0:
+                saver.save(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, i))
+
+            sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.5})
+    else:
+        saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, stepId))
+        imgId = 0
+        with open('../data/submission.csv', 'w') as f:
+            f.write('ImageId,Label\n')
+            for batch in inout.TestGetter():
+                for res in sess.run(output, feed_dict = {x: batch, keepProb: 1}):
+                    imgId += 1
+                    f.write('%d,%d\n'%(imgId, res))
 
 if __name__ == '__main__':
-    run()
+    if not (len(sys.argv) == 4 and sys.argv[1] == 'train') and not (len(sys.argv) == 5 and sys.argv[1] == 'test'):
+        print("Usage:")
+        print(" python3 main.py train <experimentID> <runID>")
+        print(" python3 main.py test <experimentID> <runID> <stepID>")
+        exit(0)
+
+    if sys.argv[1] == 'train':
+        run('train', sys.argv[2], int(sys.argv[3]))
+    else:
+        run('test', sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
 

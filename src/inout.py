@@ -11,7 +11,7 @@ def DataGetter(trainSize, validateSize):
         @return : (training getter, validating getter) '''
 
     f = open('../data/train.csv')
-    next(f) # The first line is title
+    next(f) # The first line is header
     lines = map(lambda row: row.strip().split(','), f)
     dataset = list(map(lambda row: (oneHot(10, int(row[0])), numpy.array(tuple(map(float, row[1:])))), lines))
     del f
@@ -24,4 +24,14 @@ def DataGetter(trainSize, validateSize):
             yield (numpy.array(images), numpy.array(labels))
 
     return subGetter(dataset[:-validateSize], trainSize), subGetter(dataset[-validateSize:], None)
+
+def TestGetter():
+    f = open('../data/test.csv')
+    next(f) # The first line is header
+    lines = map(lambda row: row.strip().split(','), f)
+    dataset = list(map(lambda row: numpy.array(tuple(map(float, row))), lines))
+    del f
+
+    for batch in [dataset[i * 500 : (i + 1) * 500] for i in range(len(dataset) // 500)]:
+        yield numpy.array(batch)
 

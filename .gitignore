@@ -1,7 +1,7 @@
 *~
 *.swp
 *.pyc
-logs
+experiments
 data
 MNIST_data
 
