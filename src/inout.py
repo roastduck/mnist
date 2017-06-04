@@ -1,5 +1,6 @@
 import random
-import numpy # Should be imported after random
+import itertools
+import numpy # Should be imported after random and itertools
 
 def oneHot(size, key):
     return numpy.array([i == key for i in range(size)])
@@ -13,17 +14,30 @@ def DataGetter(trainSize, validateSize):
     f = open('../data/train.csv')
     next(f) # The first line is header
     lines = map(lambda row: row.strip().split(','), f)
-    dataset = list(map(lambda row: (oneHot(10, int(row[0])), numpy.array(tuple(map(float, row[1:])))), lines))
+    dataset = list(map(lambda row: (numpy.array(tuple(map(float, row[1:]))), oneHot(10, int(row[0]))), lines))
     del f
+    trainset = dataset[validateSize:]
+    validateset = dataset[:validateSize]
+    random.shuffle(trainset)
 
     def subGetter(dataset, batchSize): # batchSize = None means whole set
+        if batchSize is None:
+            batchSize = len(dataset)
+        assert batchSize <= len(dataset)
+        pos = 0
         while True:
-            batch = dataset if batchSize is None else random.sample(dataset, batchSize)
-            labels = list(map(lambda d: d[0], batch))
-            images = list(map(lambda d: d[1], batch))
-            yield (numpy.array(images), numpy.array(labels))
+            _pos = (pos + batchSize) % len(dataset)
+            if pos < _pos:
+                batch = itertools.islice(dataset, pos, _pos)
+            elif pos > _pos:
+                batch = itertools.chain(itertools.islice(dataset, pos, len(dataset)), itertools.islice(dataset, 0, _pos))
+            else:
+                batch = dataset
+            pos = _pos
 
-    return subGetter(dataset[:-validateSize], trainSize), subGetter(dataset[-validateSize:], None)
+            yield list(map(numpy.array, zip(*batch)))
+
+    return subGetter(trainset, trainSize), subGetter(validateset, None)
 
 def TestGetter():
     f = open('../data/test.csv')

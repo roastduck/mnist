@@ -37,7 +37,7 @@ def convLayer(x, height, width, inChannels, outChannels, name):
     with tf.name_scope(name):
         weight = weightVar([height, width, inChannels, outChannels])
         bias = biasVar([outChannels])
-        conv = tf.nn.elu(conv2d(x, weight) + bias)
+        conv = tf.nn.relu(conv2d(x, weight) + bias)
         return maxPool2x2(conv)
 
 def denseLayer(x, inChannels, outChannels, name):
@@ -46,7 +46,7 @@ def denseLayer(x, inChannels, outChannels, name):
     with tf.name_scope(name):
         weight = weightVar([inChannels, outChannels])
         bias = biasVar([outChannels])
-        return tf.nn.elu(tf.matmul(x, weight) + bias)
+        return tf.nn.relu(tf.matmul(x, weight) + bias)
 
 def outLayer(x, inChannels, outChannels):
     ''' Output layer '''
@@ -69,15 +69,13 @@ def run(action, expId, runId, stepId = None):
     _y = tf.placeholder(tf.float32, shape=[None, 10], name = 'y_true')
     xImage = tf.reshape(x, [-1,28,28,1])
 
-    conv1 = convLayer(xImage, 5, 5, 1, 32, 'conv1')
-    conv2 = convLayer(conv1, 5, 5, 32, 64, 'conv2')
-    conv2Flat = tf.reshape(conv2, [-1, 7 * 7 * 64])
-    dense1 = denseLayer(conv2Flat, 7 * 7 * 64, 1024, 'dense1')
-
     keepProb = tf.placeholder(tf.float32, name = 'keepProb')
-    drop = tf.nn.dropout(dense1, keepProb)
+    conv1 = tf.nn.dropout(convLayer(xImage, 5, 5, 1, 32, 'conv1'), keepProb)
+    conv2 = tf.nn.dropout(convLayer(conv1, 5, 5, 32, 64, 'conv2'), keepProb)
+    conv2Flat = tf.reshape(conv2, [-1, 7 * 7 * 64])
+    dense1 = tf.nn.dropout(denseLayer(conv2Flat, 7 * 7 * 64, 1024, 'dense1'), keepProb)
 
-    y = outLayer(drop, 1024, 10)
+    y = outLayer(dense1, 1024, 10)
     entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=y))
     optimizer = tf.train.AdamOptimizer(conf["learningRate"]).minimize(entropy)
     output = tf.argmax(y, 1)
@@ -91,7 +89,7 @@ def run(action, expId, runId, stepId = None):
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
 
-    summaryWriter = tf.summary.FileWriter('experiments/%s/logs'%(expId), sess.graph)
+    summaryWriter = tf.summary.FileWriter('experiments/%s/%s/logs'%(expId, runId), sess.graph)
     # summaries = tf.summary.merge_all()
 
     saver = tf.train.Saver(tf.global_variables(), max_to_keep = None)
@@ -112,7 +110,7 @@ def run(action, expId, runId, stepId = None):
             if (i + 1) % 1000 == 0:
                 saver.save(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, i))
 
-            sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.5})
+            sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.75})
     else:
         saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, stepId))
         imgId = 0
