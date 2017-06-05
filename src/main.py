@@ -37,7 +37,7 @@ def convLayer(x, height, width, inChannels, outChannels, name):
     with tf.name_scope(name):
         weight = weightVar([height, width, inChannels, outChannels])
         bias = biasVar([outChannels])
-        conv = tf.nn.relu(conv2d(x, weight) + bias)
+        conv = tf.nn.elu(conv2d(x, weight) + bias)
         return maxPool2x2(conv)
 
 def denseLayer(x, inChannels, outChannels, name):
@@ -46,7 +46,7 @@ def denseLayer(x, inChannels, outChannels, name):
     with tf.name_scope(name):
         weight = weightVar([inChannels, outChannels])
         bias = biasVar([outChannels])
-        return tf.nn.relu(tf.matmul(x, weight) + bias)
+        return tf.nn.elu(tf.matmul(x, weight) + bias)
 
 def outLayer(x, inChannels, outChannels):
     ''' Output layer '''
