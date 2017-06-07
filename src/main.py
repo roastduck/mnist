@@ -4,6 +4,7 @@ import json
 import tensorflow as tf
 
 import inout
+import disturb
 
 def weightVar(shape):
     ''' Generate variables as weight '''
@@ -110,6 +111,7 @@ def run(action, expId, runId, stepId = None):
             if (i + 1) % 1000 == 0:
                 saver.save(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, i))
 
+            disturb.disturbBatch(trainBatch[0])
             sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.75})
     else:
         saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, stepId))
