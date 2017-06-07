@@ -1,0 +1,7 @@
+*
+!.gitignore
+!*.data*
+!*.index
+!*.meta
+!submission_final.csv
+!test.csv

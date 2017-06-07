@@ -1,4 +1,3 @@
-import os
 import sys
 import json
 import tensorflow as tf
@@ -57,14 +56,14 @@ def outLayer(x, inChannels, outChannels):
         bias = biasVar([outChannels])
         return tf.matmul(x, weight) + bias
 
-def run(action, expId, runId, stepId = None):
-    assert action == 'test' or not os.path.isfile("experiments/%s/%s/checkpoint0")
-    with open("experiments/%s/%s/conf.json"%(expId, runId)) as f:
-        conf = json.load(f)
-    assert "startEpisode" in conf
-    assert "endEpisode" in conf
-    assert "learningRate" in conf
-    assert "fromCheckpoint" in conf
+def run(action, expId = None, runId = None, stepId = None):
+    if action == 'train':
+        with open("experiments/%s/%s/conf.json"%(expId, runId)) as f:
+            conf = json.load(f)
+        assert "startEpisode" in conf
+        assert "endEpisode" in conf
+        assert "learningRate" in conf
+        assert "fromCheckpoint" in conf
 
     x = tf.placeholder(tf.float32, shape=[None, 784], name = 'x')
     _y = tf.placeholder(tf.float32, shape=[None, 10], name = 'y_true')
@@ -78,7 +77,8 @@ def run(action, expId, runId, stepId = None):
 
     y = outLayer(dense1, 1024, 10)
     entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=_y, logits=y))
-    optimizer = tf.train.AdamOptimizer(conf["learningRate"]).minimize(entropy)
+    if action == 'train':
+        optimizer = tf.train.AdamOptimizer(conf["learningRate"]).minimize(entropy)
     output = tf.argmax(y, 1)
     _output = tf.argmax(_y, 1)
     correct = tf.equal(output, _output)
@@ -90,13 +90,14 @@ def run(action, expId, runId, stepId = None):
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
 
-    summaryWriter = tf.summary.FileWriter('experiments/%s/%s/logs'%(expId, runId), sess.graph)
+    if action == 'train':
+        summaryWriter = tf.summary.FileWriter('experiments/%s/%s/logs'%(expId, runId), sess.graph)
     # summaries = tf.summary.merge_all()
 
     saver = tf.train.Saver(tf.global_variables(), max_to_keep = None)
 
     if action == 'train':
-        if conf["fromCheckpoint"] is not None:
+        if action == 'train' and conf["fromCheckpoint"] is not None:
             saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId - 1, conf["fromCheckpoint"]))
 
         trainData, validateData = inout.DataGetter(50, 5000)
@@ -114,7 +115,10 @@ def run(action, expId, runId, stepId = None):
             disturb.disturbBatch(trainBatch[0])
             sess.run(optimizer, feed_dict = {x: trainBatch[0], _y: trainBatch[1], keepProb: 0.75})
     else:
-        saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, stepId))
+        if action == 'test':
+            saver.restore(sess, "experiments/%s/%s/checkpoint%s"%(expId, runId, stepId))
+        else:
+            saver.restore(sess, "../data/cnn_final")
         imgId = 0
         with open('../data/submission.csv', 'w') as f:
             f.write('ImageId,Label\n')
@@ -124,14 +128,20 @@ def run(action, expId, runId, stepId = None):
                     f.write('%d,%d\n'%(imgId, res))
 
 if __name__ == '__main__':
-    if not (len(sys.argv) == 4 and sys.argv[1] == 'train') and not (len(sys.argv) == 5 and sys.argv[1] == 'test'):
+    if not (len(sys.argv) == 4 and sys.argv[1] == 'train') and not (len(sys.argv) == 5 and sys.argv[1] == 'test') and not (len(sys.argv) == 2 and sys.argv[1] == 'run'):
         print("Usage:")
-        print(" python3 main.py train <experimentID> <runID>")
-        print(" python3 main.py test <experimentID> <runID> <stepID>")
+        print("Train a network and save to checkpoint:")
+        print(" python3 cnn.py train <experimentID> <runID>")
+        print("Test a trained checkpoint:")
+        print(" python3 cnn.py test <experimentID> <runID> <stepID>")
+        print("Run the final network:")
+        print(" python3 cnn.py run")
         exit(0)
 
     if sys.argv[1] == 'train':
         run('train', sys.argv[2], int(sys.argv[3]))
-    else:
+    elif sys.argv[1] == 'test':
         run('test', sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+    else:
+        run('run')
 
