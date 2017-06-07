@@ -1,6 +1,6 @@
 # MNIST Experiment
 
-源代码见`src`文件夹`，文档见`doc/document.pdf`，`data/submission_final_cnn.csv`是用CNN模型运行出来的最佳结果，`data/submission_final_mlp.csv`是用MLP模型运行出来的最佳结果。程序运行方法如下：
+源代码见`src`文件夹，文档见`doc/document.pdf`，`data/submission_final_cnn.csv`是用CNN模型运行出来的最佳结果，`data/submission_final_mlp.csv`是用MLP模型运行出来的最佳结果。程序运行方法如下：
 
 ## 需求
 
